@@ -33,7 +33,8 @@ maeSummary <- function (data,
 # Formulas a serem utilizadas
 formula1 <- preco ~ area + quartos + suites + vagas + bairro.CENTRO + bairro.FRAGATA + bairro.PORTO + bairro.TRES.VENDAS + bairro.ZONA.NORTE
 formula2 <- preco ~ area + area2 + area3 + quartos + quartos2 + quartos3 + suites + suites2 + suites3 + vagas + vagas2 + vagas3 + bairro.CENTRO + bairro.FRAGATA + bairro.PORTO + bairro.TRES.VENDAS + bairro.ZONA.NORTE
-
+formula3 <- preco ~ area + area2 + area3 + quartos + quartos2 + quartos3 + area/quartos + area*quartos + suites + suites2 + suites3 + quartos/suites + quartos*suites + vagas + vagas2 + vagas3 + area/vagas + area*vagas + bairro.CENTRO + bairro.FRAGATA + bairro.PORTO + bairro.TRES.VENDAS + bairro.ZONA.NORTE
+  
 # Metodo de cross validacao da funcao train
 fitControl <- trainControl(method = "repeatedcv", number = 10, repeats = 10, summaryFunction = maeSummary, savePredictions = "final")
 
@@ -51,6 +52,13 @@ reg.poly
 (mse.regpoly <- mse(reg.poly$pred$obs*adj1+adj2, reg.poly$pred$pred*adj1+adj2))
 (mae.regpoly <- mae(reg.poly$pred$obs*adj1+adj2, reg.poly$pred$pred*adj1+adj2))
 
+# Regressao com interacoes
+set.seed(21)
+reg.interac <- train(formula3, data = scaledTrain, method = "lm", trControl = fitControl, metric = "MAE", maximize = FALSE)
+reg.interac
+(mse.reginterac <- mse(reg.interac$pred$obs*adj1+adj2, reg.interac$pred$pred*adj1+adj2))
+(mae.reginterac <- mae(reg.interac$pred$obs*adj1+adj2, reg.interac$pred$pred*adj1+adj2))
+
 # Rede neural com nnet
 my.grid <- expand.grid(.decay = c(0.003, 0.001, 5e-4), .size = c(2, 3, 4, 5))
 set.seed(21)
@@ -60,7 +68,7 @@ plot(nnetfit)
 (mse.nnet <- mse(nnetfit$pred$obs*adj1+adj2, nnetfit$pred$pred*adj1+adj2))
 (mae.nnet <- mae(nnetfit$pred$obs*adj1+adj2, nnetfit$pred$pred*adj1+adj2))
 
-# Rede neural com neuralnet (mais de uma hiden layers)
+# Rede neural com neuralnet (mais de uma hidden layer)
 my.grid2 <- expand.grid(.layer1 = c(2, 3, 4), .layer2 = c(4, 5), .layer3 = c(0))
 set.seed(21)
 neuralnetfit <- train(formula1, data = scaledTrain, method = "neuralnet", tuneGrid = my.grid2, trControl = fitControl, metric = "MAE", maximize = FALSE)
@@ -83,6 +91,13 @@ svm.linear2
 (mse.svmlinear2 <- mse(svm.linear2$pred$obs*adj1+adj2, svm.linear2$pred$pred*adj1+adj2))
 (mae.svmlinear2 <- mae(svm.linear2$pred$obs*adj1+adj2, svm.linear2$pred$pred*adj1+adj2))
 
+# Linear support vector regression com polinomios e interacoes
+set.seed(21)
+svm.linear3 <- train(formula3, data = scaledTrain, method = "svmLinear", trControl=fitControl, metric = "MAE", maximize = FALSE)
+svm.linear3
+(mse.svmlinear3 <- mse(svm.linear3$pred$obs*adj1+adj2, svm.linear3$pred$pred*adj1+adj2))
+(mae.svmlinear3 <- mae(svm.linear3$pred$obs*adj1+adj2, svm.linear3$pred$pred*adj1+adj2))
+
 # Support vector regression com radial kernel
 svmGrid <- expand.grid(sigma= 2^c(-10, -5, 0), C= 2^c(0:5))
 set.seed(21)
@@ -101,18 +116,30 @@ plot(svm.radial2)
 (mse.svmradial2 <- mse(svm.radial2$pred$obs*adj1+adj2, svm.radial2$pred$pred*adj1+adj2))
 (mae.svmradial2 <- mae(svm.radial2$pred$obs*adj1+adj2, svm.radial2$pred$pred*adj1+adj2))
 
+# Support vector regression com radial kernel, polinomios e interacoes
+svmGrid <- expand.grid(sigma= 2^c(-10, -5, 0), C= 2^c(0:5))
+set.seed(21)
+svm.radial3 <- train(formula3, data = scaledTrain, method = "svmRadial", trControl=fitControl, metric = "MAE", maximize = FALSE, tuneGrid = svmGrid)
+svm.radial3
+plot(svm.radial3)
+(mse.svmradial3 <- mse(svm.radial3$pred$obs*adj1+adj2, svm.radial3$pred$pred*adj1+adj2))
+(mae.svmradial3 <- mae(svm.radial3$pred$obs*adj1+adj2, svm.radial3$pred$pred*adj1+adj2))
+
 # Avaliar criterios para diferentes modelos
-rValues <- resamples(list(reglinear=reg.linear, regpoly=reg.poly, nnet=nnetfit, neuralnet=neuralnetfit, svmlinear=svm.linear1, svmlinear_poly=svm.linear2, svmradial=svm.radial1, svmradial_poly=svm.radial2))
+rValues <- resamples(list(reglinear=reg.linear, regpoly=reg.poly, reginterac = reg.interac, nnet=nnetfit, neuralnet=neuralnetfit, svmlinear=svm.linear1, svmlinear_poly=svm.linear2, svmlinear_interac=svm.linear3, svmradial=svm.radial1, svmradial_poly=svm.radial2, svmradial_interac=svm.radial3))
 rValues$values
 summary(rValues)
 pred_eval <- data.frame(reglinear=c(mse.reglinear, mae.reglinear),
                    regpoly=c(mse.regpoly, mae.regpoly),
+                   reginterac=c(mse.reginterac, mae.reginterac),
                    nnet=c(mse.nnet, mae.nnet),
                    neuralnet=c(mse.neuralnet, mae.neuralnet),
-                   svmlinear=c(mse.svmlinear1, mae.svmlinear1),
+                   svmlinear=c(mse.svmlinear1, mae.svmlinear),
                    svmlinear_poly=c(mse.svmlinear2, mae.svmlinear2),
+                   svmlinear_interac=c(mse.svmlinear3, mae.svmlinear3),
                    svmradial=c(mse.svmradial1, mae.svmradial1),
-                   svmradial_poly=c(mse.svmradial2, mae.svmradial2))
+                   svmradial_poly=c(mse.svmradial2, mae.svmradial2),
+                   svmradial_interac=c(mse.svmradial3, mae.svmradial3))
 rownames(pred_eval) <- c("MSE", "MAE")
 pred_eval
 
@@ -126,7 +153,11 @@ pred_test <- predict(svm.radial2, newdata = scaledTest)
 pred_test <- pred_test*adj1+adj2
 mse(pred_test, testData$preco)
 mae(pred_test, testData$preco)
+<<<<<<< HEAD
 View(cbind(data.predict, testData$preco))
+=======
+View(cbind(pred_test, testData$preco))
+>>>>>>> regisely/master
 
 # Observar maiores erros de previsao
 ## Conjunto train
